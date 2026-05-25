@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UniPlanner — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="dashboard">
+    <header class="header">
+      <div class="brand">
+        <h1>📚 UniPlanner</h1>
+        <p>Your study tasks at a glance</p>
+      </div>
+      <div class="user-bar">
+        <span id="user-email" class="user-email"></span>
+        <button type="button" id="logout-btn" class="btn btn-secondary btn-sm">Log out</button>
+      </div>
+    </header>
+
+    <div id="dashboard-message" class="message" role="alert"></div>
+
+    <div class="dashboard-grid">
+      <aside class="panel">
+        <h2>Add a task</h2>
+
+        <form id="task-form" class="task-form">
+          <div class="form-group">
+            <label for="task-title">Title</label>
+            <input type="text" id="task-title" name="title" required placeholder="e.g. Chapter 5 homework" maxlength="200">
+          </div>
+
+          <div class="form-group">
+            <label for="task-subject">Subject</label>
+            <input type="text" id="task-subject" name="subject" required placeholder="e.g. Calculus" maxlength="100">
+          </div>
+
+          <div class="form-group">
+            <label for="task-deadline">Deadline</label>
+            <input type="date" id="task-deadline" name="deadline" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="task-priority">Priority</label>
+              <select id="task-priority" name="priority" required>
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="task-status">Status</label>
+              <select id="task-status" name="status" required>
+                <option value="pending" selected>Pending</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Add task</button>
+        </form>
+      </aside>
+
+      <main class="panel">
+        <h2>My tasks</h2>
+
+        <div class="filters" role="group" aria-label="Filter tasks">
+          <button type="button" class="filter-btn active" data-filter="all">All</button>
+          <button type="button" class="filter-btn" data-filter="pending">Pending</button>
+          <button type="button" class="filter-btn" data-filter="completed">Completed</button>
+          <button type="button" class="filter-btn" data-filter="high">High priority</button>
+        </div>
+
+        <div id="task-loading" class="loading hidden">Loading tasks…</div>
+        <div id="task-list" class="task-list" aria-live="polite"></div>
+
+        <div id="empty-state" class="empty-state hidden">
+          <div class="empty-icon" aria-hidden="true">📝</div>
+          <p>No tasks here yet. Add one to get started!</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js"></script>
+</body>
+</html>
