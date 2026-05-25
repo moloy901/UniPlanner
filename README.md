@@ -1,4 +1,4 @@
-# UniPlanner
+UniPlanner is a student task management web application built with HTML, CSS, JavaScript, and Supabase. It supports user authentication, task creation, task filtering, task completion, and task deletion.
 
 Study task planner with Supabase auth and database.
 
