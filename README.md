@@ -27,7 +27,16 @@ Study task planner with Supabase auth and database.
 
 4. Run the SQL in `supabase-schema.sql` in the Supabase SQL Editor.
 
-5. In Supabase → Authentication → Providers, enable Email. If email confirmation is on, confirm your account before logging in.
+5. In Supabase → Authentication → Providers, enable Email.
+
+   To stop users from signing in with an email inbox they do not own, turn on email confirmations in Supabase:
+
+   - Go to Authentication → Providers → Email.
+   - Enable Confirm email / email confirmation.
+   - Add your auth page URL in Authentication → URL Configuration if Supabase asks for an allowed redirect URL, for example `http://localhost:5173/index.html`.
+
+   The app blocks login until the email confirmation link has been opened.
+   Supabase's built-in email sender has a rate limit, so repeated tests can show `email rate limit exceeded`; wait a few minutes or configure a custom SMTP provider in Authentication → SMTP Settings.
 
 6. Start the dev server (do not open `index.html` directly in the browser):
 

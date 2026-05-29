@@ -2,6 +2,7 @@ const SUPABASE_URL = "https://nxlcpxgvtznwiummiuhv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Jo8q0qxwouHxJtWboT04LQ_EfHKLj8o";
 
 let supabaseClient = null;
+const SIGNUP_EMAIL_COOLDOWN_MS = 60 * 1000;
 
 // ---------- Helpers ----------
 
@@ -15,6 +16,95 @@ function hideMessage(el) {
   if (!el) return;
   el.textContent = "";
   el.className = "message";
+}
+
+function validateEmail(email) {
+  const normalizedEmail = email.toLowerCase();
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!emailPattern.test(normalizedEmail)) {
+    return "Please enter a valid email address.";
+  }
+
+  const [localPart, domain] = normalizedEmail.split("@");
+  const typoDomains = {
+    "gmai.com": "gmail.com",
+    "gmial.com": "gmail.com",
+    "gnail.com": "gmail.com",
+    "gmail.con": "gmail.com",
+    "yaho.com": "yahoo.com",
+    "yahoo.con": "yahoo.com",
+    "hotmial.com": "hotmail.com",
+    "hotmai.com": "hotmail.com",
+    "outlok.com": "outlook.com",
+    "outlook.con": "outlook.com",
+  };
+
+  if (typoDomains[domain]) {
+    return `Did you mean ${localPart}@${typoDomains[domain]}?`;
+  }
+
+  return "";
+}
+
+function isEmailConfirmed(user) {
+  return Boolean(user && (user.email_confirmed_at || user.confirmed_at));
+}
+
+function getAuthPageUrl() {
+  return new URL("index.html", window.location.href).href;
+}
+
+function getAuthUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const hashParams = new URLSearchParams(hash);
+
+  hashParams.forEach((value, key) => {
+    if (!params.has(key)) {
+      params.set(key, value);
+    }
+  });
+
+  return params;
+}
+
+function clearAuthUrl() {
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
+function getSignupCooldownKey(email) {
+  return `signup-email-cooldown:${email.toLowerCase()}`;
+}
+
+function getSignupCooldownSeconds(email) {
+  const cooldownUntil = Number(localStorage.getItem(getSignupCooldownKey(email)) || 0);
+  const remainingMs = cooldownUntil - Date.now();
+
+  if (remainingMs <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(remainingMs / 1000);
+}
+
+function startSignupCooldown(email) {
+  localStorage.setItem(
+    getSignupCooldownKey(email),
+    String(Date.now() + SIGNUP_EMAIL_COOLDOWN_MS)
+  );
+}
+
+function getAuthErrorMessage(error) {
+  const message = error && error.message ? error.message : "Authentication failed.";
+
+  if (/rate limit/i.test(message)) {
+    return "Too many confirmation emails were sent. Please wait a few minutes before trying again.";
+  }
+
+  return message;
 }
 
 function formatDate(dateStr) {
@@ -45,17 +135,59 @@ function priorityLabel(p) {
 
 async function initAuth() {
   const messageEl = document.getElementById("auth-message");
+  const authParams = getAuthUrlParams();
+  const authError = authParams.get("error_description") || authParams.get("error");
+  const isConfirmationReturn =
+    authParams.get("type") === "signup" ||
+    authParams.has("access_token") ||
+    authParams.has("code");
 
   const { data, error } = await supabaseClient.auth.getSession();
+
+  if (authError) {
+    clearAuthUrl();
+    showMessage(messageEl, authError.replace(/\+/g, " "), "error");
+    return;
+  }
+
+  let callbackSession = null;
+
+  if (authParams.has("code")) {
+    const { data: exchangeData, error: exchangeError } =
+      await supabaseClient.auth.exchangeCodeForSession(authParams.get("code"));
+
+    if (exchangeError) {
+      clearAuthUrl();
+      showMessage(messageEl, exchangeError.message, "error");
+      return;
+    }
+
+    callbackSession = exchangeData.session;
+  }
 
   if (error) {
     showMessage(messageEl, error.message, "error");
     return;
   }
 
-  if (data.session) {
+  if (isConfirmationReturn) {
+    if (callbackSession || data.session) {
+      await supabaseClient.auth.signOut();
+    }
+
+    clearAuthUrl();
+    showMessage(messageEl, "Email confirmed successfully. Please log in now.", "success");
+    return;
+  }
+
+  if (data.session && isEmailConfirmed(data.session.user)) {
     window.location.href = "./dashboard.html";
     return;
+  }
+
+  if (data.session) {
+    await supabaseClient.auth.signOut();
+    showMessage(messageEl, "Please confirm your email before logging in.", "error");
   }
 
   const tabs = document.querySelectorAll(".tab");
@@ -66,6 +198,9 @@ async function initAuth() {
     showMessage(messageEl, "Login form not found.", "error");
     return;
   }
+
+  const signupButton = signupForm.querySelector('button[type="submit"]');
+  let isSignupSubmitting = false;
 
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -99,6 +234,12 @@ async function initAuth() {
       return;
     }
 
+    const emailError = validateEmail(email);
+    if (emailError) {
+      showMessage(messageEl, emailError, "error");
+      return;
+    }
+
     const { data, error } = await supabaseClient.auth.signInWithPassword({
       email: email,
       password: password,
@@ -114,6 +255,12 @@ async function initAuth() {
       return;
     }
 
+    if (!isEmailConfirmed(data.session.user)) {
+      await supabaseClient.auth.signOut();
+      showMessage(messageEl, "Please confirm your email before logging in.", "error");
+      return;
+    }
+
     showMessage(messageEl, "Welcome back! Redirecting...", "success");
 
     setTimeout(() => {
@@ -126,6 +273,10 @@ async function initAuth() {
     e.preventDefault();
     e.stopPropagation();
 
+    if (isSignupSubmitting) {
+      return;
+    }
+
     hideMessage(messageEl);
 
     const email = document.getElementById("signup-email").value.trim();
@@ -134,6 +285,22 @@ async function initAuth() {
 
     if (!email || !password || !confirm) {
       showMessage(messageEl, "Please fill in all fields.", "error");
+      return;
+    }
+
+    const emailError = validateEmail(email);
+    if (emailError) {
+      showMessage(messageEl, emailError, "error");
+      return;
+    }
+
+    const cooldownSeconds = getSignupCooldownSeconds(email);
+    if (cooldownSeconds > 0) {
+      showMessage(
+        messageEl,
+        `Please wait ${cooldownSeconds}s before sending another confirmation email.`,
+        "error"
+      );
       return;
     }
 
@@ -147,15 +314,42 @@ async function initAuth() {
       return;
     }
 
-    const { error } = await supabaseClient.auth.signUp({
-      email: email,
-      password: password,
-    });
+    isSignupSubmitting = true;
+    if (signupButton) {
+      signupButton.disabled = true;
+      signupButton.textContent = "Sending confirmation...";
+    }
 
-    if (error) {
-      showMessage(messageEl, error.message, "error");
+    let signUpError = null;
+
+    try {
+      const { error } = await supabaseClient.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          emailRedirectTo: getAuthPageUrl(),
+        },
+      });
+      signUpError = error;
+    } catch (error) {
+      signUpError = error;
+    } finally {
+      if (signupButton) {
+        signupButton.disabled = false;
+        signupButton.textContent = "Create account";
+      }
+      isSignupSubmitting = false;
+    }
+
+    if (signUpError) {
+      if (/rate limit/i.test(signUpError.message || "")) {
+        startSignupCooldown(email);
+      }
+      showMessage(messageEl, getAuthErrorMessage(signUpError), "error");
       return;
     }
+
+    startSignupCooldown(email);
 
     // Account create er por auto login hole logout kore dibo
     await supabaseClient.auth.signOut();
@@ -176,7 +370,7 @@ async function initAuth() {
 
     showMessage(
       messageEl,
-      "Account created successfully! Please log in now.",
+      "Confirmation link sent. Please check your email before logging in.",
       "success"
     );
   });
@@ -199,6 +393,12 @@ async function initDashboard() {
   }
 
   if (!data.session) {
+    window.location.href = "./index.html";
+    return;
+  }
+
+  if (!isEmailConfirmed(data.session.user)) {
+    await supabaseClient.auth.signOut();
     window.location.href = "./index.html";
     return;
   }
