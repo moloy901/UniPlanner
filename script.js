@@ -383,6 +383,7 @@ let allTasks = [];
 let activeFilter = "all";
 let activeSearch = "";
 let activeSort = "deadline";
+let editingTaskId = null;
 
 function getTodayDateString() {
   const today = new Date();
@@ -485,6 +486,11 @@ async function initDashboard() {
     taskForm.addEventListener("submit", handleAddTask);
   }
 
+  const cancelEditBtn = document.getElementById("cancel-edit-btn");
+  if (cancelEditBtn) {
+    cancelEditBtn.addEventListener("click", resetTaskForm);
+  }
+
   const deadlineInput = document.getElementById("task-deadline");
   if (deadlineInput) {
     deadlineInput.min = getTodayDateString();
@@ -540,8 +546,19 @@ async function handleAddTask(e) {
     return;
   }
 
-  if (deadline < getTodayDateString()) {
+  if (!editingTaskId && deadline < getTodayDateString()) {
     showMessage(messageEl, "Deadline cannot be in the past.", "error");
+    return;
+  }
+
+  if (editingTaskId) {
+    await updateTask(editingTaskId, {
+      title: title,
+      subject: subject,
+      deadline: deadline,
+      priority: priority,
+      status: status,
+    });
     return;
   }
 
@@ -566,15 +583,102 @@ async function handleAddTask(e) {
   allTasks.unshift(data);
   renderTasks();
 
-  e.target.reset();
-  document.getElementById("task-priority").value = "medium";
-  document.getElementById("task-status").value = "pending";
+  resetTaskForm();
 
   showMessage(messageEl, "Task added successfully!", "success");
 
   setTimeout(() => {
     hideMessage(messageEl);
   }, 2500);
+}
+
+async function updateTask(id, updates) {
+  const messageEl = document.getElementById("dashboard-message");
+
+  const { data, error } = await supabaseClient
+    .from("tasks")
+    .update(updates)
+    .eq("id", id)
+    .eq("user_id", currentUser.id)
+    .select()
+    .single();
+
+  if (error) {
+    showMessage(messageEl, error.message, "error");
+    return;
+  }
+
+  allTasks = allTasks.map((task) => (task.id === id ? data : task));
+  resetTaskForm();
+  renderTasks();
+
+  showMessage(messageEl, "Task updated successfully!", "success");
+
+  setTimeout(() => {
+    hideMessage(messageEl);
+  }, 2500);
+}
+
+function startEditTask(id) {
+  const task = allTasks.find((item) => item.id === id);
+  const taskForm = document.getElementById("task-form");
+  const submitBtn = document.getElementById("task-submit-btn");
+  const cancelEditBtn = document.getElementById("cancel-edit-btn");
+
+  if (!task || !taskForm || !submitBtn || !cancelEditBtn) {
+    return;
+  }
+
+  editingTaskId = id;
+  const deadlineInput = document.getElementById("task-deadline");
+
+  document.getElementById("task-title").value = task.title;
+  document.getElementById("task-subject").value = task.subject;
+  deadlineInput.min = task.deadline < getTodayDateString() ? task.deadline : getTodayDateString();
+  deadlineInput.value = task.deadline;
+  document.getElementById("task-priority").value = task.priority;
+  document.getElementById("task-status").value = task.status;
+
+  submitBtn.textContent = "Update task";
+  cancelEditBtn.classList.remove("hidden");
+  taskForm.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("task-title").focus();
+}
+
+function resetTaskForm() {
+  const taskForm = document.getElementById("task-form");
+  const submitBtn = document.getElementById("task-submit-btn");
+  const cancelEditBtn = document.getElementById("cancel-edit-btn");
+
+  editingTaskId = null;
+
+  if (taskForm) {
+    taskForm.reset();
+  }
+
+  const priorityEl = document.getElementById("task-priority");
+  const statusEl = document.getElementById("task-status");
+  const deadlineInput = document.getElementById("task-deadline");
+
+  if (priorityEl) {
+    priorityEl.value = "medium";
+  }
+
+  if (statusEl) {
+    statusEl.value = "pending";
+  }
+
+  if (deadlineInput) {
+    deadlineInput.min = getTodayDateString();
+  }
+
+  if (submitBtn) {
+    submitBtn.textContent = "Add task";
+  }
+
+  if (cancelEditBtn) {
+    cancelEditBtn.classList.add("hidden");
+  }
 }
 
 async function loadTasks() {
@@ -726,6 +830,9 @@ function renderTasks() {
       </div>
 
       <div class="task-actions">
+        <button type="button" class="btn btn-secondary btn-sm edit-btn">
+          Edit
+        </button>
         <button type="button" class="btn btn-danger btn-sm delete-btn">
           Delete
         </button>
@@ -733,10 +840,15 @@ function renderTasks() {
     `;
 
     const checkbox = card.querySelector(".task-check");
+    const editBtn = card.querySelector(".edit-btn");
     const deleteBtn = card.querySelector(".delete-btn");
 
     checkbox.addEventListener("change", (e) => {
       toggleComplete(task.id, e.target.checked);
+    });
+
+    editBtn.addEventListener("click", () => {
+      startEditTask(task.id);
     });
 
     deleteBtn.addEventListener("click", () => {

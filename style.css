@@ -441,6 +441,15 @@ a:hover {
   gap: 1rem;
 }
 
+.form-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.form-actions .btn {
+  flex: 1;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -646,8 +655,13 @@ a:hover {
 
   .task-tools,
   .task-search,
-  .task-sort {
+  .task-sort,
+  .form-actions {
     width: 100%;
+  }
+
+  .form-actions {
+    flex-direction: column;
   }
 }
 
