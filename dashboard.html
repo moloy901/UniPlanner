@@ -21,6 +21,25 @@
 
     <div id="dashboard-message" class="message" role="alert"></div>
 
+    <section class="stats-grid" aria-label="Task summary">
+      <div class="stat-card">
+        <span class="stat-label">Total tasks</span>
+        <strong id="stat-total">0</strong>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Due today</span>
+        <strong id="stat-today">0</strong>
+      </div>
+      <div class="stat-card stat-card-warning">
+        <span class="stat-label">Overdue</span>
+        <strong id="stat-overdue">0</strong>
+      </div>
+      <div class="stat-card stat-card-success">
+        <span class="stat-label">Completed</span>
+        <strong id="stat-completed">0</strong>
+      </div>
+    </section>
+
     <div class="dashboard-grid">
       <aside class="panel">
         <h2>Add a task</h2>
@@ -65,10 +84,26 @@
       </aside>
 
       <main class="panel">
-        <h2>My tasks</h2>
+        <div class="panel-heading">
+          <h2>My tasks</h2>
+
+          <div class="task-tools">
+            <label class="sr-only" for="task-search">Search tasks</label>
+            <input type="search" id="task-search" class="task-search" placeholder="Search title or subject">
+
+            <label class="sr-only" for="task-sort">Sort tasks</label>
+            <select id="task-sort" class="task-sort">
+              <option value="deadline">Sort by deadline</option>
+              <option value="priority">Sort by priority</option>
+              <option value="created">Newest first</option>
+            </select>
+          </div>
+        </div>
 
         <div class="filters" role="group" aria-label="Filter tasks">
           <button type="button" class="filter-btn active" data-filter="all">All</button>
+          <button type="button" class="filter-btn" data-filter="today">Today</button>
+          <button type="button" class="filter-btn" data-filter="overdue">Overdue</button>
           <button type="button" class="filter-btn" data-filter="pending">Pending</button>
           <button type="button" class="filter-btn" data-filter="completed">Completed</button>
           <button type="button" class="filter-btn" data-filter="high">High priority</button>

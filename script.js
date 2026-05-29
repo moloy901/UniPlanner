@@ -381,6 +381,62 @@ async function initAuth() {
 let currentUser = null;
 let allTasks = [];
 let activeFilter = "all";
+let activeSearch = "";
+let activeSort = "deadline";
+
+function getTodayDateString() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function isTaskOverdue(task) {
+  return task.status !== "completed" && task.deadline < getTodayDateString();
+}
+
+function isTaskDueToday(task) {
+  return task.status !== "completed" && task.deadline === getTodayDateString();
+}
+
+function getDaysUntil(deadline) {
+  const today = new Date(`${getTodayDateString()}T00:00:00`);
+  const dueDate = new Date(`${deadline}T00:00:00`);
+  const diffMs = dueDate - today;
+
+  return Math.round(diffMs / 86400000);
+}
+
+function getDueStatus(task) {
+  if (task.status === "completed") {
+    return { label: "Done", className: "due-done" };
+  }
+
+  const days = getDaysUntil(task.deadline);
+
+  if (days < 0) {
+    return {
+      label: `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`,
+      className: "due-overdue",
+    };
+  }
+
+  if (days === 0) {
+    return { label: "Due today", className: "due-today" };
+  }
+
+  if (days === 1) {
+    return { label: "Due tomorrow", className: "due-soon" };
+  }
+
+  if (days <= 3) {
+    return { label: `Due in ${days} days`, className: "due-soon" };
+  }
+
+  return { label: `Due in ${days} days`, className: "due-normal" };
+}
 
 async function initDashboard() {
   const messageEl = document.getElementById("dashboard-message");
@@ -429,6 +485,28 @@ async function initDashboard() {
     taskForm.addEventListener("submit", handleAddTask);
   }
 
+  const deadlineInput = document.getElementById("task-deadline");
+  if (deadlineInput) {
+    deadlineInput.min = getTodayDateString();
+  }
+
+  const searchInput = document.getElementById("task-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      activeSearch = searchInput.value.trim().toLowerCase();
+      renderTasks();
+    });
+  }
+
+  const sortSelect = document.getElementById("task-sort");
+  if (sortSelect) {
+    activeSort = sortSelect.value;
+    sortSelect.addEventListener("change", () => {
+      activeSort = sortSelect.value;
+      renderTasks();
+    });
+  }
+
   document.querySelectorAll(".filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".filter-btn").forEach((b) => {
@@ -459,6 +537,11 @@ async function handleAddTask(e) {
 
   if (!title || !subject || !deadline) {
     showMessage(messageEl, "Please fill in title, subject, and deadline.", "error");
+    return;
+  }
+
+  if (deadline < getTodayDateString()) {
+    showMessage(messageEl, "Deadline cannot be in the past.", "error");
     return;
   }
 
@@ -522,19 +605,64 @@ async function loadTasks() {
 }
 
 function getFilteredTasks() {
-  if (activeFilter === "pending") {
-    return allTasks.filter((t) => t.status === "pending");
+  let tasks = [...allTasks];
+
+  if (activeFilter === "today") {
+    tasks = tasks.filter(isTaskDueToday);
+  } else if (activeFilter === "overdue") {
+    tasks = tasks.filter(isTaskOverdue);
+  } else if (activeFilter === "pending") {
+    tasks = tasks.filter((t) => t.status === "pending");
+  } else if (activeFilter === "completed") {
+    tasks = tasks.filter((t) => t.status === "completed");
+  } else if (activeFilter === "high") {
+    tasks = tasks.filter((t) => t.priority === "high");
   }
 
-  if (activeFilter === "completed") {
-    return allTasks.filter((t) => t.status === "completed");
+  if (activeSearch) {
+    tasks = tasks.filter((task) => {
+      const searchableText = `${task.title} ${task.subject}`.toLowerCase();
+      return searchableText.includes(activeSearch);
+    });
   }
 
-  if (activeFilter === "high") {
-    return allTasks.filter((t) => t.priority === "high");
+  const priorityRank = { high: 0, medium: 1, low: 2 };
+
+  tasks.sort((a, b) => {
+    if (activeSort === "priority") {
+      return (
+        priorityRank[a.priority] - priorityRank[b.priority] ||
+        a.deadline.localeCompare(b.deadline)
+      );
+    }
+
+    if (activeSort === "created") {
+      return new Date(b.created_at) - new Date(a.created_at);
+    }
+
+    return (
+      a.deadline.localeCompare(b.deadline) ||
+      priorityRank[a.priority] - priorityRank[b.priority]
+    );
+  });
+
+  return tasks;
+}
+
+function updateTaskStats() {
+  const totalEl = document.getElementById("stat-total");
+  const todayEl = document.getElementById("stat-today");
+  const overdueEl = document.getElementById("stat-overdue");
+  const completedEl = document.getElementById("stat-completed");
+
+  if (!totalEl || !todayEl || !overdueEl || !completedEl) {
+    return;
   }
 
-  return allTasks;
+  totalEl.textContent = allTasks.length;
+  todayEl.textContent = allTasks.filter(isTaskDueToday).length;
+  overdueEl.textContent = allTasks.filter(isTaskOverdue).length;
+  completedEl.textContent = allTasks.filter((task) => task.status === "completed").length;
 }
 
 function renderTasks() {
@@ -542,6 +670,8 @@ function renderTasks() {
   const empty = document.getElementById("empty-state");
 
   if (!list || !empty) return;
+
+  updateTaskStats();
 
   const filtered = getFilteredTasks();
 
@@ -551,7 +681,7 @@ function renderTasks() {
     empty.classList.remove("hidden");
 
     empty.querySelector("p").textContent =
-      activeFilter === "all"
+      activeFilter === "all" && !activeSearch
         ? "No tasks here yet. Add one to get started!"
         : "No tasks match this filter.";
 
@@ -567,6 +697,7 @@ function renderTasks() {
     card.dataset.id = task.id;
 
     const isCompleted = task.status === "completed";
+    const dueStatus = getDueStatus(task);
 
     card.innerHTML = `
       <input
@@ -582,6 +713,9 @@ function renderTasks() {
         <div class="task-meta">
           <span>📖 ${escapeHtml(task.subject)}</span>
           <span>📅 ${formatDate(task.deadline)}</span>
+          <span class="due-chip ${dueStatus.className}">
+            ${escapeHtml(dueStatus.label)}
+          </span>
           <span class="badge badge-priority-${task.priority}">
             ${priorityLabel(task.priority)}
           </span>
