@@ -131,6 +131,13 @@ function priorityLabel(p) {
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
+function getUserDisplayName(user) {
+  const metadata = (user && user.user_metadata) || {};
+  const name = metadata.full_name || metadata.name;
+
+  return name || (user && user.email) || "";
+}
+
 // ---------- Auth Page ----------
 
 async function initAuth() {
@@ -279,11 +286,12 @@ async function initAuth() {
 
     hideMessage(messageEl);
 
+    const name = document.getElementById("signup-name").value.trim();
     const email = document.getElementById("signup-email").value.trim();
     const password = document.getElementById("signup-password").value;
     const confirm = document.getElementById("signup-confirm").value;
 
-    if (!email || !password || !confirm) {
+    if (!name || !email || !password || !confirm) {
       showMessage(messageEl, "Please fill in all fields.", "error");
       return;
     }
@@ -328,6 +336,10 @@ async function initAuth() {
         password: password,
         options: {
           emailRedirectTo: getAuthPageUrl(),
+          data: {
+            full_name: name,
+            name: name,
+          },
         },
       });
       signUpError = error;
@@ -464,7 +476,8 @@ async function initDashboard() {
 
   const userEmailEl = document.getElementById("user-email");
   if (userEmailEl) {
-    userEmailEl.textContent = currentUser.email;
+    userEmailEl.textContent = getUserDisplayName(currentUser);
+    userEmailEl.title = currentUser.email || "";
   }
 
   supabaseClient.auth.onAuthStateChange((_event, session) => {
