@@ -25,6 +25,8 @@ Study task planner with Supabase auth and database.
    VITE_SUPABASE_ANON_KEY=eyJhbG...
    ```
 
+   The app reads these values from `.env`. If they are missing or the project URL is wrong, signup/login will not be able to connect to Supabase.
+
 4. Run the SQL in `supabase-schema.sql` in the Supabase SQL Editor.
 
 5. In Supabase → Authentication → Providers, enable Email.

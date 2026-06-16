@@ -1,5 +1,11 @@
-const SUPABASE_URL = "https://nxlcpxgvtznwiummiuhv.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Jo8q0qxwouHxJtWboT04LQ_EfHKLj8o";
+function getEnvValue(name) {
+  return (import.meta.env && import.meta.env[name]) || "";
+}
+
+const SUPABASE_URL =
+  getEnvValue("VITE_SUPABASE_URL") || "https://nxlcpxgvtznwiummiuhv.supabase.co";
+const SUPABASE_ANON_KEY =
+  getEnvValue("VITE_SUPABASE_ANON_KEY") || "sb_publishable_Jo8q0qxwouHxJtWboT04LQ_EfHKLj8o";
 
 let supabaseClient = null;
 const SIGNUP_EMAIL_COOLDOWN_MS = 60 * 1000;
@@ -99,6 +105,10 @@ function startSignupCooldown(email) {
 
 function getAuthErrorMessage(error) {
   const message = error && error.message ? error.message : "Authentication failed.";
+
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "Could not connect to Supabase. Please check your project URL, API key, and internet connection.";
+  }
 
   if (/rate limit/i.test(message)) {
     return "Too many confirmation emails were sent. Please wait a few minutes before trying again.";
